@@ -79,6 +79,39 @@ Para trabajar en la interfaz con recarga en caliente (con el resto del sistema a
 cd interface/app && npm ci && npm run dev    # http://localhost:3000, reenvía /graphql al :5000
 ```
 
+## Despliegue en el clúster del curso
+
+Versión desplegada: **http://chat-integrales.134.199.176.3.nip.io**
+
+El gateway y la interfaz corren en el namespace del grupo (`grupo-catch-up`) y usan los
+servicios ya desplegados por cada equipo, por DNS interno:
+
+| Servicio | Dirección en el clúster |
+| --- | --- |
+| users · channels · messages | `http://{users,channels,messages}.servicios-base.svc.cluster.local:8000` |
+| integrals | `http://integrals.grupo-catch-up.svc.cluster.local` |
+| threads | `http://thread-api.grupo-threads.svc.cluster.local:8000` |
+| polls | `http://polls.grupo-encuestas.svc.cluster.local:8004` |
+
+- Cada push a `main` corre las pruebas y publica las imágenes en GHCR
+  (`ghcr.io/bolgunn/interfaz-chat-{gateway,interface}`, tags `v1` y SHA) con
+  [`.github/workflows/images.yml`](.github/workflows/images.yml).
+- Los manifiestos están en [`k8s/`](k8s/): Deployment + Service de cada componente e Ingress
+  Traefik. Los contenedores corren sin root (política `restricted`) y caben en la cuota del
+  namespace.
+- Requiere un kubeconfig con acceso a `grupo-catch-up` (en `~/.kube/config`, **nunca** dentro
+  del repo).
+
+```bash
+kubectl apply -k k8s/
+kubectl rollout restart deploy/gateway deploy/interface -n grupo-catch-up   # tras publicar una imagen nueva
+```
+
+**Limitación conocida en el clúster:** el `messages` de `servicios-base` no tiene
+`RABBITMQ_URL`, así que no publica `chat.message.created` y `integralbot` no responde a
+`/integralcalc` escrito en el chat. La calculadora (REST) funciona igual; en local (compose)
+el flujo por chat sí funciona porque el chat base de `base/` publica los eventos.
+
 ## Funcionalidades
 
 - **Identidad:** crear un usuario o entrar con un ID existente; el navegador recuerda los
