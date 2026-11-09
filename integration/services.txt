@@ -1,0 +1,4 @@
+# nombre  repositorio                                                   commit
+integrals https://github.com/Misulas/modulo-integrales.git              4a03648fb93e80a5b74185cbc9672f0f17087964
+threads   https://github.com/IsaiasACF/Thread-Service.git               47a05ce942c88934c3bcadec1f8061962602d13a
+polls     https://github.com/TomasCano-Usm/INF326-Microservicio-Polls.git 315e6050977d3ad8bdfb105e9a2d397f5fd1349d

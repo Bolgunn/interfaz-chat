@@ -1,0 +1,18 @@
+# URL pública de la interfaz (mismo esquema nip.io que el Ingress de integrals).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: interface
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: chat-integrales.134.199.176.3.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: interface
+                port:
+                  number: 80

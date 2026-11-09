@@ -1,0 +1,59 @@
+# API Gateway GraphQL. Llama a los servicios de otros namespaces por DNS interno
+# (la NetworkPolicy del grupo permite servicios-base:8000 y los namespaces de estudiantes).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels: {app: gateway}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gateway}
+  template:
+    metadata:
+      labels: {app: gateway}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: gateway
+          image: chat-gateway
+          ports:
+            - containerPort: 5000
+          env:
+            - name: USERS_URL
+              value: http://users.servicios-base.svc.cluster.local:8000
+            - name: CHANNELS_URL
+              value: http://channels.servicios-base.svc.cluster.local:8000
+            - name: MESSAGES_URL
+              value: http://messages.servicios-base.svc.cluster.local:8000
+            - name: INTEGRALS_URL
+              value: http://integrals.grupo-catch-up.svc.cluster.local
+            - name: THREADS_URL
+              value: http://thread-api.grupo-threads.svc.cluster.local:8000
+            - name: POLLS_URL
+              value: http://polls.grupo-encuestas.svc.cluster.local:8004
+          readinessProbe:
+            httpGet: {path: /health, port: 5000}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /health, port: 5000}
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 300m, memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector: {app: gateway}
+  ports:
+    - port: 5000
+      targetPort: 5000

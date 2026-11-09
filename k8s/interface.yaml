@@ -1,0 +1,42 @@
+# Interfaz React servida por nginx; reenvía /graphql al Service `gateway`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interface
+  labels: {app: interface}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: interface}
+  template:
+    metadata:
+      labels: {app: interface}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: interface
+          image: chat-interface
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: interface
+spec:
+  selector: {app: interface}
+  ports:
+    - port: 80
+      targetPort: 8080

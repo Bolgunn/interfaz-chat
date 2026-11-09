@@ -1,0 +1,13 @@
+# kubectl apply -k k8s/   (namespace del grupo: grupo-catch-up)
+namespace: grupo-catch-up
+resources:
+  - gateway.yaml
+  - interface.yaml
+  - ingress.yaml
+images:
+  - name: chat-gateway
+    newName: ghcr.io/bolgunn/interfaz-chat-gateway
+    newTag: v1
+  - name: chat-interface
+    newName: ghcr.io/bolgunn/interfaz-chat-interface
+    newTag: v1

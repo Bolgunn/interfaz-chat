@@ -1,0 +1,31 @@
+# Ajustes locales para Polls (TomasCano-Usm/INF326-Microservicio-Polls), sin modificar su repo.
+# - Su compose no se une a `microsvcs`: la API se agrega con el alias `polls`.
+# - Se habilita la integración con `messages` para anunciar encuestas en el canal.
+# - Su broker también se llama `rabbitmq`; dentro de `microsvcs` ese nombre es el
+#   broker de integrals, así que la API usa el alias `polls-rabbitmq` de su red propia.
+# - Se cambian puertos del host que chocan con integrals y threads.
+services:
+  polls-api:
+    ports: !override
+      - "8006:8004"
+    environment:
+      MESSAGES_ENABLED: "true"
+      MESSAGES_BASE_URL: http://messages:8000
+      RABBITMQ_URL: amqp://polls:polls-dev-password@polls-rabbitmq:5672/
+    networks:
+      default: {}
+      microsvcs:
+        aliases: [polls]
+  rabbitmq:
+    ports: !override
+      - "127.0.0.1:15674:15672"
+    networks:
+      default:
+        aliases: [polls-rabbitmq]
+  postgres:
+    ports: !reset []
+
+networks:
+  microsvcs:
+    name: microsvcs
+    external: true

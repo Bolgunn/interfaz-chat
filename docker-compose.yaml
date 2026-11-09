@@ -1,0 +1,27 @@
+# API Gateway (GraphQL) + interfaz web. Se unen a la red `microsvcs` creada por el chat base.
+name: interfaz-chat
+
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "5000:5000"
+    environment:
+      USERS_URL: http://users:8000
+      CHANNELS_URL: http://channels:8000
+      MESSAGES_URL: http://messages:8000
+      INTEGRALS_URL: http://integrals:8000
+      THREADS_URL: http://threads:8000
+      POLLS_URL: http://polls:8004
+
+  interface:
+    build: ./interface
+    ports:
+      - "3000:8080"
+    depends_on:
+      - gateway
+
+networks:
+  default:
+    name: microsvcs
+    external: true

@@ -1,0 +1,9 @@
+# Ajustes locales para Thread-Service (IsaiasACF/Thread-Service), sin modificar su repo.
+# Su compose publica la API en 8004 y RabbitMQ en 15672, igual que integrals.
+services:
+  threads:
+    ports: !override
+      - "8005:8000"
+  rabbitmq:
+    ports: !override
+      - "127.0.0.1:15673:15672"
