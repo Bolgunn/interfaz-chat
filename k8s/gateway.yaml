@@ -35,6 +35,10 @@ spec:
               value: http://thread-api.grupo-threads.svc.cluster.local:8000
             - name: POLLS_URL
               value: http://polls.grupo-encuestas.svc.cluster.local:8004
+            # `messages` de servicios-base no publica eventos: el gateway responde /integralcalc
+            # como el usuario integralbot que integrals ya creó (colección bot_identity).
+            - name: INTEGRALBOT_ID
+              value: 6e6a49d6-e7ac-4ff8-9549-e4c1dd0c811e
           readinessProbe:
             httpGet: {path: /health, port: 5000}
             periodSeconds: 10

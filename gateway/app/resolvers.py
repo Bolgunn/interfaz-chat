@@ -5,6 +5,7 @@ devuelven null si ese servicio falla: el chat sigue funcionando con un servicio 
 """
 import asyncio
 import logging
+import os
 import re
 from typing import Any, Optional
 from uuid import uuid4
@@ -110,8 +111,66 @@ async def resolve_messages(_, info, channel_id: str):
 @mutation.field("sendMessage")
 async def resolve_send_message(_, info, channel_id: str, author_id: str, content: str):
     up, _cache = _ctx(info)
-    return await up.post("messages", f"/api/v1/channels/{channel_id}/messages",
-                         {"author_id": author_id, "content": content})
+    message = await up.post("messages", f"/api/v1/channels/{channel_id}/messages",
+                            {"author_id": author_id, "content": content})
+    latex = parse_command(content)
+    if BOT_ID and latex is not None and author_id != BOT_ID:
+        # Respuesta en segundo plano: el cálculo puede tardar y el mensaje ya se envió.
+        task = asyncio.create_task(_bot_reply(up, channel_id, latex))
+        _bot_tasks.add(task)
+        task.add_done_callback(_bot_tasks.discard)
+    return message
+
+
+# ---------- integralbot (respaldo sin eventos) ----------
+# Donde `messages` no publica `chat.message.created` (clúster del curso), el gateway hace lo
+# que haría el consumidor de integrals: calcula por REST y responde como `integralbot`.
+# Se activa solo si INTEGRALBOT_ID está definido; en local responde el bot real por RabbitMQ.
+
+BOT_ID = os.environ.get("INTEGRALBOT_ID") or None
+USAGE = "Uso: /integralcalc <latex>. Ejemplo: /integralcalc \\int_0^1 x^2 \\, dx"
+COMMAND = re.compile(r"^/(?:integralcalc|integral)(?=\s|$)\s*(.*)$", re.DOTALL)
+_bot_tasks: set = set()
+
+
+def parse_command(content: Any) -> Optional[str]:
+    """LaTeX del comando, "" si falta, o None si no es un comando (igual que integrals)."""
+    if not isinstance(content, str):
+        return None
+    match = COMMAND.match(content.strip())
+    if match is None:
+        return None
+    latex = match.group(1).strip()
+    if len(latex) >= 2 and latex.startswith("$") and latex.endswith("$"):
+        latex = latex.strip("$").strip()
+    return latex
+
+
+def format_reply(integral: dict) -> str:
+    if integral["status"] == "failed":
+        return f"No pude calcular la integral: {integral['error']['message']}"[:4000]
+    result = integral["result"]
+    text = f"{integral['latex']} = {result['latex']}"
+    if result["indefinite"]:
+        text += " + C"
+    if result.get("numeric") is not None:
+        text += f" ≈ {result['numeric']:.10g}"
+    return text[:4000]
+
+
+async def _bot_reply(up, channel_id: str, latex: str) -> None:
+    if latex == "":
+        text = USAGE
+    else:
+        try:
+            text = format_reply(await up.post("integrals", "/api/v1/integrals", {"latex": latex}))
+        except UpstreamError as exc:
+            text = f"No pude calcular la integral: {exc}"
+    try:
+        await up.post("messages", f"/api/v1/channels/{channel_id}/messages",
+                      {"author_id": BOT_ID, "content": text})
+    except UpstreamError as exc:
+        log.warning("integralbot no pudo responder en %s: %s", channel_id, exc)
 
 
 async def resolve_author(obj, info):

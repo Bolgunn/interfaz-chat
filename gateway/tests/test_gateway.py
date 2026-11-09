@@ -1,5 +1,6 @@
 """Pruebas del gateway con servicios simulados (httpx.MockTransport, sin red)."""
 import json
+import time
 
 import httpx
 import pytest
@@ -43,6 +44,10 @@ def make_client(down: frozenset = frozenset(), calls: list | None = None):
         if service == "users" and request.method == "POST":
             body = json.loads(request.content)
             return httpx.Response(201, json={"id": "u9", **body})
+        if service == "messages" and request.method == "POST":
+            body = json.loads(request.content)
+            return httpx.Response(201, json={"id": "m9", "channel_id": "c1",
+                                             "created_at": "2026-11-08T12:00:03", **body})
         if service == "messages" and path == "/api/v1/channels/c1/messages":
             return httpx.Response(200, json=MESSAGES)
         if service == "threads" and path.endswith("/replies"):
@@ -153,3 +158,52 @@ def test_circuit_breaker_skips_calls_to_a_down_service():
     # La segunda consulta no vuelve a llamar a threads: falla al instante con null.
     assert first >= 1 and sum(1 for _, url in calls if ":8005/" in url) == first
     assert all(m["replyCount"] is None for m in body["data"]["messages"])
+
+
+SEND = """mutation($c: ID!, $a: ID!, $t: String!) {
+  sendMessage(channelId: $c, authorId: $a, content: $t) { id content } }"""
+
+
+def _bot_posts(bodies):
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and not any(b.get("author_id") == "bot" for b in bodies):
+        time.sleep(0.02)
+    return [b for b in bodies if b.get("author_id") == "bot"]
+
+
+@pytest.fixture
+def bot(monkeypatch):
+    from app import resolvers
+    monkeypatch.setattr(resolvers, "BOT_ID", "bot")
+
+
+def test_gateway_integralbot_replies_when_enabled(bot, monkeypatch):
+    bodies = []
+    real_post = httpx.AsyncClient.request
+
+    async def spy(self, method, url, **kwargs):
+        if method == "POST" and "/messages" in str(url):
+            bodies.append(kwargs.get("json") or {})
+        return await real_post(self, method, url, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", spy)
+    calls = []
+    with make_client(calls=calls) as client:
+        data = gql(client, SEND, {"c": "c1", "a": "u1", "t": "/integralcalc $x$"})["data"]
+        assert data["sendMessage"]["id"] == "m9"
+        replies = _bot_posts(bodies)
+    assert replies and replies[0]["content"] == r"x = \frac{x^{2}}{2} + C"
+    assert ("POST", "http://localhost:8004/api/v1/integrals") in calls
+
+
+def test_gateway_integralbot_usage_and_disabled(monkeypatch):
+    calls = []
+    with make_client(calls=calls) as client:
+        gql(client, SEND, {"c": "c1", "a": "u1", "t": "/integralcalc x"})
+        time.sleep(0.2)
+    assert not any("8004" in url for _, url in calls)  # sin INTEGRALBOT_ID no responde
+
+    from app import resolvers
+    assert resolvers.parse_command("/integralcalc") == ""
+    assert resolvers.parse_command("/integralcalculo x") is None
+    assert resolvers.parse_command("hola") is None

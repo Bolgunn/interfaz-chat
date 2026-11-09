@@ -107,10 +107,14 @@ kubectl apply -k k8s/
 kubectl rollout restart deploy/gateway deploy/interface -n grupo-catch-up   # tras publicar una imagen nueva
 ```
 
-**Limitación conocida en el clúster:** el `messages` de `servicios-base` no tiene
-`RABBITMQ_URL`, así que no publica `chat.message.created` y `integralbot` no responde a
-`/integralcalc` escrito en el chat. La calculadora (REST) funciona igual; en local (compose)
-el flujo por chat sí funciona porque el chat base de `base/` publica los eventos.
+**`/integralcalc` en el clúster:** el `messages` de `servicios-base` no tiene `RABBITMQ_URL`,
+así que no publica `chat.message.created` y el consumidor de `integrals` nunca ve los comandos.
+Para que el bot responda igual, el gateway tiene un respaldo que se activa con
+`INTEGRALBOT_ID` (solo en [`k8s/gateway.yaml`](k8s/gateway.yaml)): tras enviar un mensaje que
+empieza con `/integralcalc` o `/integral`, calcula con `POST /api/v1/integrals` y publica la
+respuesta en el canal como el usuario `integralbot` que integrals ya tenía creado. En local la
+variable no se define y responde el bot real por RabbitMQ, así no hay respuestas duplicadas.
+Diferencia visible: en el historial esos cálculos figuran con origen *REST* y no *Chat*.
 
 ## Funcionalidades
 
